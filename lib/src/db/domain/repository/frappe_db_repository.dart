@@ -56,8 +56,9 @@ abstract interface class FrappeDBRepository {
   /// {@endtemplate}
   Future<T?> createDoc<T extends FrappeDoc>(
     String docType,
-    Map<String, dynamic> body,
-  );
+    Map<String, dynamic> body, {
+    required T Function(JSON json) fromJson,
+  });
 
   /// {@template FrappeDBRepository.updateDoc}
   ///
@@ -71,8 +72,9 @@ abstract interface class FrappeDBRepository {
   Future<T?> updateDoc<T>(
     String docType,
     String docName,
-    Map<String, dynamic> body,
-  );
+    Map<String, dynamic> body, {
+    required T Function(JSON json) fromJson,
+  });
 
   /// {@template FrappeDBRepository.deleteDoc}
   ///
