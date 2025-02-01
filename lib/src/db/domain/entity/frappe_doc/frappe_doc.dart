@@ -1,7 +1,8 @@
 import 'package:frappe_sdk/src/db/domain/entity/frappe_doc/frappe_doc_status.dart';
+import 'package:frappe_sdk/src/db/domain/utils/typedefs.dart';
 
 /// Represents a Frappe document.
-class FrappeDoc {
+abstract class FrappeDoc {
   /// Creates a new Frappe document.
   FrappeDoc({
     required this.idx,
@@ -33,4 +34,7 @@ class FrappeDoc {
 
   /// The status of the document, weather `saved` or `submitted` or `cancelled`.
   final FrappeDocStatus docStatus;
+
+  /// Converts the [FrappeDoc] to a `json` ([Map]).
+  JSON toJson();
 }

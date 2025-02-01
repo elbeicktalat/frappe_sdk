@@ -1,13 +1,18 @@
 /// Represents the status of a Frappe document.
 enum FrappeDocStatus {
   /// The document is saved.
-  saved,
+  saved(0),
 
   /// The document is submitted.
-  submitted,
+  submitted(1),
 
   /// The document is cancelled.
-  cancelled;
+  cancelled(2);
+
+  const FrappeDocStatus(this.value);
+
+  /// The value of the [FrappeDocStatus].
+  final int value;
 
   /// Parses the value to a [FrappeDocStatus].
   static FrappeDocStatus parse(int value) {
