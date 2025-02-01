@@ -1,7 +1,8 @@
 name: frappe_sdk
-description: A starting point for Dart libraries or applications.
+description: The dart library for Frappe REST API.
 version: 0.0.1
-# repository: https://github.com/my_org/my_repo
+repository: https://github.com/elbeicktalat/frappe_sdk
+issue_tracker: https://github.com/elbeicktalat/frappe_sdk/issues
 
 environment:
   sdk: ^3.6.0
@@ -9,9 +10,7 @@ environment:
 # Add regular dependencies here.
 dependencies:
   dio: ^5.5.0
-  dio_cache_interceptor: ^3.5.1
   logger: ^2.5.0
-  # path: ^1.8.0
 
 dev_dependencies:
   build_runner: ^2.4.14
