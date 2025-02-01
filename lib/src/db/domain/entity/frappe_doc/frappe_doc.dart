@@ -1,3 +1,7 @@
+// Copyright (©) 2025. Talat El Beick. All rights reserved.
+// Use of this source code is governed by a MIT-style license that can be
+// found in the LICENSE file.
+
 import 'package:frappe_sdk/src/db/domain/entity/frappe_doc/frappe_doc_status.dart';
 import 'package:frappe_sdk/src/db/domain/utils/typedefs.dart';
 
