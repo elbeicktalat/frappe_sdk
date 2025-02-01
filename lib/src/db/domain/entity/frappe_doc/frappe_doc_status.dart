@@ -1,0 +1,24 @@
+/// Represents the status of a Frappe document.
+enum FrappeDocStatus {
+  /// The document is saved.
+  saved,
+
+  /// The document is submitted.
+  submitted,
+
+  /// The document is cancelled.
+  cancelled;
+
+  /// Parses the value to a [FrappeDocStatus].
+  static FrappeDocStatus parse(int value) {
+    switch (value) {
+      case 0:
+        return saved;
+      case 1:
+        return submitted;
+      case 2:
+        return cancelled;
+    }
+    throw Exception('Unknown value: $value');
+  }
+}
