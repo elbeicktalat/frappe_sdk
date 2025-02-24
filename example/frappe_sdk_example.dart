@@ -2,13 +2,12 @@ import 'package:frappe_sdk/src/app/frappe_app.dart';
 import 'package:frappe_sdk/src/db/domain/entity/frappe_doc/frappe_doc.dart';
 import 'package:frappe_sdk/src/db/domain/entity/frappe_doc/frappe_doc_status.dart';
 import 'package:frappe_sdk/src/db/domain/repository/frappe_db_repository.dart';
-import 'package:frappe_sdk/src/db/domain/utils/typedefs.dart';
 
 void main() async {
   final FrappeApp app = FrappeApp(
-    url: Uri.parse('https://pippos.app'),
+    url: Uri.parse('https://your-frappe-instance.com'),
     name: 'PIPPOS',
-    token: 'a934364093f9db6:07534ea3d389d8e',
+    token: '<api-key>:<secret-key>',
   );
 
   final FrappeDBRepository db = app.db;
@@ -55,10 +54,4 @@ class PaymentEntry extends FrappeDoc {
   }
 
   final double paidAmount;
-
-  @override
-  JSON toJson() {
-    // TODO(anyDeveloper): implement toJson
-    throw UnimplementedError();
-  }
 }

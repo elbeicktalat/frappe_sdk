@@ -12,6 +12,7 @@ to your frappe instance.
 - [Installation](#installation)
 - [Getting Started](#getting-started)
 - [Database](#database)
+- [Call](#call)
 
 ## Features
 
@@ -92,12 +93,54 @@ class PaymentEntry extends FrappeDoc {
 
   // add more fields here...
   final double paidAmount;
-
-  @override
-  Map<String, dynamic> toJson() {
-    // TODO(anyDeveloper): implement toJson
-    throw UnimplementedError();
-  }
 }
 ```
 
+## Call
+
+The call repo allow you to make calls to method on the frappe instance.
+You can use it to make calls to the following pre defined methods:
+
+- get_balance_on
+- get_fiscal_year
+- get_company_default
+- get_companies
+- get_children
+- get_stock_balance
+- scan_barcode
+- get_exchange_rate
+
+Get balance for account
+
+```dart
+void main() {
+  final FrappeCallRepository call = app.call;
+  
+  final double? result = await call.getBalance(
+    account: '1100 - Cash In Hand - PPS',
+  );
+}
+```
+
+You can also call any method that is defined on the frappe instance.
+```dart
+void main() {
+  final FrappeCallRepository call = app.call;
+
+  final double? balance = await call(
+    'erpnext.setup.utils.get_exchange_rate',
+    fromJson: (JSON json) => json['message'],
+    params: <String, Object?>{
+      'from_currency': 'EUR',
+      'to_currency': 'USD',
+    },
+  );
+  
+  // or pre-define method
+  final double? result = await call.getExchangeRate(
+    fromCurrency: 'EUR',
+    toCurrency: 'USD',
+  );
+}
+```
+Behind the scenes all `FrappeCallRepository` make you of `FrappeCallRepository.call` method.
