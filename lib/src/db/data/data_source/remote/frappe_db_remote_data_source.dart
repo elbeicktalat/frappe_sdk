@@ -3,13 +3,12 @@
 // found in the LICENSE file.
 
 import 'package:frappe_sdk/src/db/domain/entity/filter/filter.dart';
-import 'package:frappe_sdk/src/db/domain/entity/frappe_doc/frappe_doc.dart';
 import 'package:frappe_sdk/src/db/domain/utils/typedefs.dart';
 
 /// The remote data source of [FrappeDBRepository].
 abstract interface class FrappeDBRemoteDataSource {
   /// {@macro FrappeDBRepository.getDoc}
-  Future<T?> getDoc<T extends FrappeDoc>(
+  Future<T?> getDoc<T>(
     String docType,
     String docName, {
     required T Function(Map<String, dynamic> json) fromJson,
@@ -29,7 +28,7 @@ abstract interface class FrappeDBRemoteDataSource {
   });
 
   /// {@macro FrappeDBRepository.createDoc}
-  Future<T?> createDoc<T extends FrappeDoc>(
+  Future<T?> createDoc<T>(
     String docType,
     Map<String, dynamic> body, {
     required T Function(JSON json) fromJson,
@@ -56,7 +55,7 @@ abstract interface class FrappeDBRemoteDataSource {
   });
 
   /// {@macro FrappeDBRepository.getLastDoc}
-  Future<T?> getLastDoc<T extends FrappeDoc>(
+  Future<T?> getLastDoc<T>(
     String docType, {
     required T Function(Map<String, dynamic> json) fromJson,
     List<Filter>? filters,

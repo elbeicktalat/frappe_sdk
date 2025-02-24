@@ -8,7 +8,6 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:frappe_sdk/src/db/data/data_source/remote/frappe_db_remote_data_source.dart';
 import 'package:frappe_sdk/src/db/domain/entity/filter/filter.dart';
-import 'package:frappe_sdk/src/db/domain/entity/frappe_doc/frappe_doc.dart';
 import 'package:frappe_sdk/src/db/domain/utils/typedefs.dart';
 import 'package:frappe_sdk/src/exception/frappe_exception.dart';
 import 'package:logger/logger.dart';
@@ -34,7 +33,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
   }
 
   @override
-  Future<T?> createDoc<T extends FrappeDoc>(
+  Future<T?> createDoc<T>(
     String docType,
     Map<String, dynamic> body, {
     required T Function(JSON json) fromJson,
@@ -73,7 +72,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
   }
 
   @override
-  Future<T?> getDoc<T extends FrappeDoc>(
+  Future<T?> getDoc<T>(
     String docType,
     String docName, {
     required T Function(JSON json) fromJson,
@@ -140,7 +139,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
   }
 
   @override
-  Future<T?> getLastDoc<T extends FrappeDoc>(
+  Future<T?> getLastDoc<T>(
     String docType, {
     required T Function(JSON json) fromJson,
     List<Filter>? filters,
