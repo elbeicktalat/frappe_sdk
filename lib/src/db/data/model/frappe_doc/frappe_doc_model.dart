@@ -4,12 +4,11 @@
 
 import 'package:frappe_sdk/src/db/domain/entity/frappe_doc/frappe_doc.dart';
 import 'package:frappe_sdk/src/db/domain/entity/frappe_doc/frappe_doc_status.dart';
-import 'package:frappe_sdk/src/db/domain/utils/typedefs.dart';
 
 /// The model of [FrappeDoc].
 class FrappeDocModel extends FrappeDoc {
   /// Creates a new [FrappeDocModel].
-  FrappeDocModel({
+  const FrappeDocModel({
     required super.name,
     required super.owner,
     required super.creation,
@@ -30,19 +29,5 @@ class FrappeDocModel extends FrappeDoc {
       modified: DateTime.parse(json['modified'] as String),
       docStatus: FrappeDocStatus.parse(json['docstatus'] as int),
     );
-  }
-
-  /// Converts the [FrappeDocModel] to a [Map] (json).
-  @override
-  JSON toJson() {
-    return <String, dynamic>{
-      'idx': idx,
-      'name': name,
-      'owner': owner,
-      'modified_by': modifiedBy,
-      'creation': creation.toIso8601String(),
-      'modified': modified.toIso8601String(),
-      'docstatus': docStatus.value,
-    };
   }
 }

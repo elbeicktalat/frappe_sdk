@@ -3,12 +3,11 @@
 // found in the LICENSE file.
 
 import 'package:frappe_sdk/src/db/domain/entity/frappe_doc/frappe_doc_status.dart';
-import 'package:frappe_sdk/src/db/domain/utils/typedefs.dart';
 
 /// Represents a Frappe document.
 abstract class FrappeDoc {
   /// Creates a new Frappe document.
-  FrappeDoc({
+  const FrappeDoc({
     required this.idx,
     required this.name,
     required this.owner,
@@ -38,7 +37,4 @@ abstract class FrappeDoc {
 
   /// The status of the document, weather `saved` or `submitted` or `cancelled`.
   final FrappeDocStatus docStatus;
-
-  /// Converts the [FrappeDoc] to a `json` ([Map]).
-  JSON toJson();
 }
