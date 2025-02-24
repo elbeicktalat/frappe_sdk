@@ -105,9 +105,19 @@ abstract interface class FrappeCallRepository {
     bool withSerialNo = false,
   });
 
-
   /// Search for item by barcode.
   ///
   /// * [barcode] The barcode to search for.
   Future<BarcodeScanResult?> scanBarcode(String barcode);
+
+  /// Get exchange rate.
+  ///
+  /// * [fromCurrency] The currency to convert from.
+  /// * [toCurrency] The currency to convert to.
+  /// * [date] The date to get exchange price on.
+  Future<double?> getExchangeRate({
+    required String fromCurrency,
+    required String toCurrency,
+    DateTime? date,
+  });
 }
