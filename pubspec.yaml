@@ -1,6 +1,7 @@
 name: frappe_sdk
-description: The dart library for Frappe REST API.
-version: 0.0.1
+description: The dart library for Frappe REST API, this package provides a clean and simple way to connect to your frappe instance.
+version: 0.0.2
+
 repository: https://github.com/elbeicktalat/frappe_sdk
 issue_tracker: https://github.com/elbeicktalat/frappe_sdk/issues
 
