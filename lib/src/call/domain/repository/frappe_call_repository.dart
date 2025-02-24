@@ -68,13 +68,13 @@ abstract interface class FrappeCallRepository {
   ///
   /// {@endtemplate}
   Future<T?> getFiscalYear<T>({
+    required T Function(JSON json) fromJson,
     DateTime? date,
     String? fiscalYear,
     String? label,
     int? verbose,
     String? company,
     bool asMap = true,
-    T Function(JSON json) fromJson,
   });
 
   /// {@template FrappeCallRepository.getCompanyDefault}
@@ -86,8 +86,9 @@ abstract interface class FrappeCallRepository {
   ///
   /// {@endtemplate}
   Future<T?> getCompanyDefault<T>({
-    String? company,
-    String? fieldName,
+    required String company,
+    required String fieldName,
+    required T Function(JSON json) fromJson,
   });
 
   /// {@template FrappeCallRepository.getCompanies}
@@ -128,9 +129,10 @@ abstract interface class FrappeCallRepository {
   Future<T?> getStockBalance<T>({
     required String itemCode,
     required String warehouse,
+    required T Function(JSON json) fromJson,
     DateTime? postingDate,
-    bool withValuationRate = false,
-    bool withSerialNo = false,
+    bool? withValuationRate,
+    bool? withSerialNo,
   });
 
   /// {@template FrappeCallRepository.scanBarcode}
