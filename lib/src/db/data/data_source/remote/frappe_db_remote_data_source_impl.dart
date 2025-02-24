@@ -125,7 +125,10 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
 
       _log.d(response);
 
-      return (response.data?['data'] as List<dynamic>)
+      final List<dynamic> data = response.data?['data'] as List<dynamic>;
+      if (data.isEmpty) return null;
+
+      return data
           .map((Object? json) => fromJson(json! as Map<String, dynamic>))
           .toList();
     } on DioException catch (e, s) {
