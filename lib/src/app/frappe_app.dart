@@ -3,6 +3,9 @@
 // found in the LICENSE file.
 
 import 'package:dio/dio.dart';
+import 'package:frappe_sdk/src/call/data/data_source/remote/frappe_call_remote_data_source_impl.dart';
+import 'package:frappe_sdk/src/call/data/repository/frappe_call_repository_impl.dart';
+import 'package:frappe_sdk/src/call/domain/repository/frappe_call_repository.dart';
 import 'package:frappe_sdk/src/db/data/data_source/remote/frappe_db_remote_data_source_impl.dart';
 import 'package:frappe_sdk/src/db/data/repository/frappe_db_repository_impl.dart';
 import 'package:frappe_sdk/src/db/domain/repository/frappe_db_repository.dart';
@@ -41,6 +44,11 @@ class FrappeApp {
   /// The [FrappeDBRepository] instance.
   FrappeDBRepository get db => FrappeDBRepositoryImpl(
         FrappeDBRemoteDataSourceImpl(_dio),
+      );
+
+  /// The [FrappeCallRepository] instance.
+  FrappeCallRepository get call => FrappeCallRepositoryImpl(
+        FrappeCallRemoteDataSourceImpl(_dio),
       );
 
   Dio get _dio {
