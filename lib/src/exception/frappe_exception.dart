@@ -25,9 +25,9 @@ abstract class FrappeException implements Exception {
 }
 
 /// An exception thrown when a document is not found.
-class FrappeDocNotFoundException extends FrappeException {
-  /// Creates a new [FrappeDocNotFoundException].
-  FrappeDocNotFoundException(
+class FrappeNotFoundException extends FrappeException {
+  /// Creates a new [FrappeNotFoundException].
+  FrappeNotFoundException(
     super.statusCode,
   ) : super(message: _badResponseExceptionMessage(statusCode));
 

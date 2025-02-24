@@ -183,7 +183,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
   void _handelHttpException(DioException e) {
     switch (e.response?.statusCode) {
       case HttpStatus.notFound:
-        throw FrappeDocNotFoundException(e.response!.statusCode!);
+        throw FrappeNotFoundException(e.response!.statusCode!);
       case HttpStatus.unauthorized:
         throw FrappeUnauthorizedException(e.response!.statusCode!);
     }
