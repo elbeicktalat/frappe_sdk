@@ -23,7 +23,12 @@ class FrappeCallRepositoryImpl implements FrappeCallRepository {
     Map<String, dynamic>? params,
     HttpMethods httpMethod = HttpMethods.get,
   }) {
-    return _remoteDataSource.call(method, fromJson: fromJson);
+    return _remoteDataSource.call(
+      method,
+      fromJson: fromJson,
+      params: params,
+      httpMethod: httpMethod,
+    );
   }
 
   @override
