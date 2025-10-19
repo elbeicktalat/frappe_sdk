@@ -1,6 +1,9 @@
 library frappe_sdk;
 
 export 'package:frappe_sdk/src/app/frappe_app.dart';
+export 'package:frappe_sdk/src/call/domain/entities/barcode_scan_result.dart';
+export 'package:frappe_sdk/src/call/domain/repository/frappe_call_repository.dart';
+export 'package:frappe_sdk/src/call/domain/utils/http_methods.dart';
 export 'package:frappe_sdk/src/db/domain/entity/filter/filter.dart';
 export 'package:frappe_sdk/src/db/domain/entity/filter/filter_operator.dart';
 export 'package:frappe_sdk/src/db/domain/entity/frappe_doc/frappe_doc.dart';
