@@ -6,10 +6,8 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:frappe_sdk/frappe_sdk.dart';
 import 'package:frappe_sdk/src/db/data/data_source/remote/frappe_db_remote_data_source.dart';
-import 'package:frappe_sdk/src/db/domain/entity/filter/filter.dart';
-import 'package:frappe_sdk/src/db/domain/repository/frappe_db_repository.dart';
-import 'package:frappe_sdk/src/db/domain/utils/typedefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// A repository implementation of [FrappeDBRepository] that uses an advanced
@@ -177,12 +175,17 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
     required T Function(Map<String, dynamic> json) fromJson,
     Set<String>? fields,
   }) async {
-    // We must fetch the full document, not just specific fields, to cache it completely.
-    final T? doc = await _remoteDataSource.getDoc<T>(
+    // Use getDocList to fetch only the specified fields for a single document.
+    // This is much more efficient than fetching the whole document.
+    final List<T?>? result = await _remoteDataSource.getDocList<T>(
       docType,
-      docName,
       fromJson: fromJson,
+      fields: fields,
+      filters: <Filter>[Filter(field: 'name', operator: FilterOperator.equal, value: docName)],
+      limit: 1,
     );
+
+    final T? doc = result?.firstOrNull;
 
     if (doc != null) {
       final String recordKey = _getRecordCacheKey(docType, docName);
