@@ -10,6 +10,7 @@ environment:
 
 # Add regular dependencies here.
 dependencies:
+  crypto: ^3.0.7
   dio: ^5.5.0
   flutter_cache_manager: ^3.4.1
   logger: ^2.5.0

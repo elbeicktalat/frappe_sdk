@@ -4,6 +4,7 @@
 
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:frappe_sdk/src/db/data/data_source/remote/frappe_db_remote_data_source.dart';
 import 'package:frappe_sdk/src/db/domain/entity/filter/filter.dart';
@@ -11,7 +12,8 @@ import 'package:frappe_sdk/src/db/domain/repository/frappe_db_repository.dart';
 import 'package:frappe_sdk/src/db/domain/utils/typedefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// A repository implementation of [FrappeDBRepository].
+/// A repository implementation of [FrappeDBRepository] that uses an advanced
+/// caching strategy to handle in-place updates and reconstruct lists efficiently.
 class FrappeDBRepositoryImpl implements FrappeDBRepository {
   /// Creates a new instance of [FrappeDBRepositoryImpl].
   FrappeDBRepositoryImpl(
@@ -24,7 +26,32 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
   final BaseCacheManager _cacheManager;
   final SharedPreferences _sharedPreferences;
 
-  String _getDocListCacheKey(String docType) => 'frappe_sdk_${docType.replaceAll(' ', '_')}_list';
+  /// Generates a key to store the list of record names for a specific query.
+  String _generateListCacheKey(
+    String docType, {
+    List<Filter>? filters,
+    int? limit,
+    int? limitStart,
+    OrderBy? orderBy,
+  }) {
+    final List<String> keyParts = <String>[
+      'list',
+      docType,
+      if (filters != null && filters.isNotEmpty) 'filters:${jsonEncode(filters)}',
+      if (limit != null) 'limit:$limit',
+      if (limitStart != null) 'limitStart:$limitStart',
+      if (orderBy != null) 'orderBy:${orderBy.field}-${orderBy.desc}',
+    ];
+    final String combinedKey = keyParts.join('&');
+    final Digest digest = sha1.convert(utf8.encode(combinedKey));
+    return 'query_$digest';
+  }
+
+  /// Generates a cache key for a single document record.
+  String _getRecordCacheKey(String docType, String docName) => 'record_${docType}_$docName';
+
+  /// Generates the key for a single document's modification timestamp.
+  String _getRecordTimestampKey(String docType, String docName) => 'ts_${docType}_$docName';
 
   @override
   Future<List<T?>?> getDocList<T>(
@@ -38,27 +65,10 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
     OrderBy? orderBy,
     String? groupBy,
   }) async {
-    // 1. Get the current count of documents on the server.
-    final int? serverDocCount = await _remoteDataSource.countDoc(docType, filters: filters);
-
-    // 2. Get the stored count from shared preferences.
-    final String cacheKey = _getDocListCacheKey(docType);
-    final int cachedDocCount = _sharedPreferences.getInt(cacheKey) ?? 0;
-
-    // 3. Try to get data from the cache first.
-    final FileInfo? fileInfo = await _cacheManager.getFileFromCache(cacheKey);
-
-    // 4. Compare counts and check if cached data exists.
-    if (serverDocCount == cachedDocCount && fileInfo != null) {
-      // If counts match and a cached file exists, return the cached data.
-      final String cachedJson = await fileInfo.file.readAsString();
-      final List<dynamic> data = json.decode(cachedJson);
-
-      // ignore: always_specify_types
-      return data.map((json) => fromJson(json as Map<String, dynamic>)).toList();
-    } else {
-      // 5. If counts differ or no cache exists, fetch from the remote data source.
-      final List<T?>? freshData = await _remoteDataSource.getDocList<T>(
+    // Note: This granular caching strategy does not work well with 'orFilters' or 'groupBy'.
+    // We will bypass the cache for such complex queries.
+    if ((orFilters != null && orFilters.isNotEmpty) || groupBy != null) {
+      return _remoteDataSource.getDocList<T>(
         docType,
         fromJson: fromJson,
         fields: fields,
@@ -69,19 +79,131 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
         orderBy: orderBy,
         groupBy: groupBy,
       );
+    }
 
-      if (freshData != null) {
-        // 6. Cache the new data and update the count in shared preferences.
-        await _cacheManager.putFile(
-          cacheKey,
-          utf8.encode(json.encode(freshData)),
-          fileExtension: 'json',
-        );
-        await _sharedPreferences.setInt(cacheKey, serverDocCount!);
+    // 1. Get a lightweight list of remote records with their modification timestamps.
+    final List<Map<String, dynamic>?>? remoteIndex = await _remoteDataSource.getDocList(
+      docType,
+      fromJson: (Map<String, dynamic> json) => json,
+      fields: <String>{'name', 'modified'},
+      filters: filters,
+      limit: limit,
+      limitStart: limitStart,
+      orderBy: orderBy,
+    );
+
+    if (remoteIndex == null) {
+      // If the server returns no data, clear any cached list for this query and return null.
+      final String listKey = _generateListCacheKey(
+        docType,
+        filters: filters,
+        limit: limit,
+        limitStart: limitStart,
+        orderBy: orderBy,
+      );
+      await _sharedPreferences.remove(listKey);
+      return null;
+    }
+
+    final List<Future<T?>> futureDocs = <Future<T?>>[];
+    final List<String> remoteDocNames = <String>[];
+
+    // 2. Intelligently decide whether to fetch from cache or network for each item.
+    for (final Map<String, dynamic>? indexItem in remoteIndex) {
+      if (indexItem == null) {
+        continue;
       }
 
-      return freshData;
+      final String docName = indexItem['name'];
+      final String remoteTimestamp = indexItem['modified'];
+      remoteDocNames.add(docName);
+
+      final String recordTimestampKey = _getRecordTimestampKey(docType, docName);
+      final String? cachedTimestamp = _sharedPreferences.getString(recordTimestampKey);
+
+      // If timestamps match, load from cache.
+      if (remoteTimestamp == cachedTimestamp) {
+        futureDocs.add(_getCachedRecord(docType, docName, fromJson: fromJson));
+      }
+      // Otherwise, fetch from network and update cache.
+      else {
+        futureDocs.add(
+          _fetchAndCacheRecord(
+            docType,
+            docName,
+            remoteTimestamp,
+            fields: fields,
+            fromJson: fromJson,
+          ),
+        );
+      }
     }
+
+    // 3. Update the cached list of names for this query.
+    final String listKey = _generateListCacheKey(
+      docType,
+      filters: filters,
+      limit: limit,
+      limitStart: limitStart,
+      orderBy: orderBy,
+    );
+    await _sharedPreferences.setStringList(listKey, remoteDocNames);
+
+    // 4. Await all futures and return the fully constructed list.
+    final List<T?> result = await Future.wait(futureDocs);
+    return result.toList();
+  }
+
+  /// Helper to get a single record from the cache.
+  Future<T?> _getCachedRecord<T>(
+    String docType,
+    String docName, {
+    required T Function(Map<String, dynamic> json) fromJson,
+  }) async {
+    final String recordKey = _getRecordCacheKey(docType, docName);
+    final FileInfo? fileInfo = await _cacheManager.getFileFromCache(recordKey);
+    if (fileInfo != null) {
+      final String cachedJson = await fileInfo.file.readAsString();
+      return fromJson(json.decode(cachedJson));
+    }
+    return null;
+  }
+
+  /// Helper to fetch a single record, cache it, and update its timestamp.
+  Future<T?> _fetchAndCacheRecord<T>(
+    String docType,
+    String docName,
+    String timestamp, {
+    required T Function(Map<String, dynamic> json) fromJson,
+    Set<String>? fields,
+  }) async {
+    // We must fetch the full document, not just specific fields, to cache it completely.
+    final T? doc = await _remoteDataSource.getDoc<T>(
+      docType,
+      docName,
+      fromJson: fromJson,
+    );
+
+    if (doc != null) {
+      final String recordKey = _getRecordCacheKey(docType, docName);
+      final String recordTimestampKey = _getRecordTimestampKey(docType, docName);
+
+      // Cache the full document. Assumes 'doc' has a 'toJson' method.
+      await _cacheManager.putFile(
+        recordKey,
+        utf8.encode(json.encode((doc as dynamic).toJson())),
+        fileExtension: 'json',
+      );
+      // Update the timestamp in SharedPreferences.
+      await _sharedPreferences.setString(recordTimestampKey, timestamp);
+    }
+    return doc;
+  }
+
+  /// Invalidates the cache for a single document.
+  Future<void> _invalidateRecordCache(String docType, String docName) async {
+    await _cacheManager.removeFile(_getRecordCacheKey(docType, docName));
+    await _sharedPreferences.remove(_getRecordTimestampKey(docType, docName));
   }
 
   @override
@@ -102,12 +224,8 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
     required T Function(JSON json) fromJson,
   }) async {
     final T? newDoc = await _remoteDataSource.createDoc(docType, body, fromJson: fromJson);
-    if (newDoc != null) {
-      // Invalidate the list cache by removing the count.
-      // The next call to getDocList will force a refresh.
-      await _sharedPreferences.remove(_getDocListCacheKey(docType));
-      await _cacheManager.removeFile(_getDocListCacheKey(docType));
-    }
+    // Creating a doc doesn't mean we need to invalidate anything,
+    // as the next getDocList will simply pick it up as a new item.
     return newDoc;
   }
 
@@ -120,9 +238,8 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
   }) async {
     final T? doc = await _remoteDataSource.updateDoc(docType, docName, body, fromJson: fromJson);
     if (doc != null) {
-      // Invalidate cache for potential list changes.
-      await _sharedPreferences.remove(_getDocListCacheKey(docType));
-      await _cacheManager.removeFile(_getDocListCacheKey(docType));
+      // Invalidate the specific record that was updated.
+      await _invalidateRecordCache(docType, docName);
     }
     return doc;
   }
@@ -134,9 +251,8 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
   ) async {
     final bool isDeleted = await _remoteDataSource.deleteDoc(docType, docName);
     if (isDeleted) {
-      // Invalidate the list cache as the count has changed.
-      await _sharedPreferences.remove(_getDocListCacheKey(docType));
-      await _cacheManager.removeFile(_getDocListCacheKey(docType));
+      // Invalidate the specific record that was deleted.
+      await _invalidateRecordCache(docType, docName);
     }
     return isDeleted;
   }
