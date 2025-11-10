@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:dio/dio.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:frappe_sdk/src/call/data/data_source/remote/frappe_call_remote_data_source_impl.dart';
 import 'package:frappe_sdk/src/call/data/repository/frappe_call_repository_impl.dart';
 import 'package:frappe_sdk/src/call/domain/repository/frappe_call_repository.dart';
@@ -10,6 +11,7 @@ import 'package:frappe_sdk/src/db/data/data_source/remote/frappe_db_remote_data_
 import 'package:frappe_sdk/src/db/data/repository/frappe_db_repository_impl.dart';
 import 'package:frappe_sdk/src/db/domain/repository/frappe_db_repository.dart';
 import 'package:frappe_sdk/src/utils/token_type.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// The Frappe application.
 class FrappeApp {
@@ -17,11 +19,14 @@ class FrappeApp {
   const FrappeApp({
     required this.url,
     required this.name,
+    required BaseCacheManager cacheManager,
+    required SharedPreferences sharedPreferences,
     this.useToken = true,
     this.headers = const <String, String>{},
     this.token,
     this.tokenType = TokenType.token,
-  });
+  })  : _cacheManager = cacheManager,
+        _sharedPreferences = sharedPreferences;
 
   /// The url of the Frappe application.
   final Uri url;
@@ -41,9 +46,17 @@ class FrappeApp {
   /// The token type of the Frappe application.
   final TokenType tokenType;
 
+  /// The [CacheManager] instance.
+  final BaseCacheManager _cacheManager;
+
+  /// The [SharedPreferences] instance.
+  final SharedPreferences _sharedPreferences;
+
   /// The [FrappeDBRepository] instance.
   FrappeDBRepository get db => FrappeDBRepositoryImpl(
         FrappeDBRemoteDataSourceImpl(_dio),
+        _cacheManager,
+        _sharedPreferences,
       );
 
   /// The [FrappeCallRepository] instance.
