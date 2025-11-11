@@ -23,13 +23,28 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
 
   @override
   Future<int?> countDoc<T>(String docType, {List<Filter>? filters}) async {
-    final List<Map<String, dynamic>?>? docs = await getDocList(
-      docType,
-      fromJson: (Map<String, dynamic> json) => json,
-      filters: filters,
-    );
+    try {
+      final Response<JSON> response = await _dio.get(
+        '/api/resource/$docType',
+        data: <String, Object?>{
+          'fields': jsonEncode(<String>['count(*) as count']),
+          'filters': filters?.map(_getFilter).toList(),
+        },
+      );
 
-    return docs?.length;
+      if (response.data == null || (response.data!['data'] as List<dynamic>).isEmpty) {
+        return 0;
+      }
+
+      final List<dynamic> data = response.data!['data'] as List<dynamic>;
+      // ignore: avoid_dynamic_calls
+      final int count = data.first['count'] as int;
+      return count;
+    } on DioException catch (e, s) {
+      _log.e(e, stackTrace: s);
+      _handelHttpException(e);
+    }
+    return null;
   }
 
   @override
@@ -39,8 +54,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
     required T Function(JSON json) fromJson,
   }) async {
     try {
-      final Response<JSON> response =
-          await _dio.post('/api/resource/$docType', data: body);
+      final Response<JSON> response = await _dio.post('/api/resource/$docType', data: body);
 
       final dynamic json = response.data?['data'];
       _log.d(json);
@@ -58,8 +72,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
   @override
   Future<bool> deleteDoc<T>(String docType, String docName) async {
     try {
-      final Response<dynamic> response =
-          await _dio.delete('/api/resource/$docType/$docName');
+      final Response<dynamic> response = await _dio.delete('/api/resource/$docType/$docName');
 
       return response.statusCode == HttpStatus.ok;
     } on DioException catch (e, s) {
@@ -78,8 +91,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
     required T Function(JSON json) fromJson,
   }) async {
     try {
-      final Response<JSON> response =
-          await _dio.get('/api/resource/$docType/$docName');
+      final Response<JSON> response = await _dio.get('/api/resource/$docType/$docName');
 
       final dynamic json = response.data?['data'];
       _log.d(json);
@@ -117,8 +129,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
           'or_filters': orFilters?.map(_getFilter).toList(),
           'limit': '$limit',
           'limit_start': '$limitStart',
-          if (orderBy != null)
-            'order_by': '${orderBy.field} ${orderBy.desc ? 'desc' : 'asc'}',
+          if (orderBy != null) 'order_by': '${orderBy.field} ${orderBy.desc ? 'desc' : 'asc'}',
           'group_by': groupBy,
         },
       );
@@ -128,9 +139,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
       final List<dynamic> data = response.data?['data'] as List<dynamic>;
       if (data.isEmpty) return null;
 
-      return data
-          .map((Object? json) => fromJson(json! as Map<String, dynamic>))
-          .toList();
+      return data.map((Object? json) => fromJson(json! as Map<String, dynamic>)).toList();
     } on DioException catch (e, s) {
       _log.e(e, stackTrace: s);
       _handelHttpException(e);
@@ -171,8 +180,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
     Map<String, dynamic> body, {
     required T Function(JSON json) fromJson,
   }) async {
-    final Response<JSON> response =
-        await _dio.put('/api/resource/$docType/$docName', data: body);
+    final Response<JSON> response = await _dio.put('/api/resource/$docType/$docName', data: body);
 
     final dynamic json = response.data?['data'];
     _log.d(json);
