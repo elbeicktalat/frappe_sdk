@@ -11,7 +11,8 @@ import 'package:frappe_sdk/src/db/data/data_source/remote/frappe_db_remote_data_
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// A repository implementation of [FrappeDBRepository] that uses an advanced
-/// caching strategy to handle in-place updates and reconstruct lists efficiently.
+/// caching strategy to handle in-place updates and reconstruct lists efficiently,
+/// including support for partially fetched documents.
 class FrappeDBRepositoryImpl implements FrappeDBRepository {
   /// Creates a new instance of [FrappeDBRepositoryImpl].
   FrappeDBRepositoryImpl(
@@ -24,9 +25,10 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
   final BaseCacheManager _cacheManager;
   final SharedPreferences _sharedPreferences;
 
-  /// Generates a key to store the list of record names for a specific query.
+  /// Generates a key that is unique to the query, including the requested fields.
   String _generateListCacheKey(
     String docType, {
+    Set<String>? fields,
     List<Filter>? filters,
     int? limit,
     int? limitStart,
@@ -35,6 +37,8 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
     final List<String> keyParts = <String>[
       'list',
       docType,
+      // CRITICAL: Add sorted fields to the key to differentiate partial caches.
+      if (fields != null && fields.isNotEmpty) 'fields:${(fields.toList()..sort()).join(',')}',
       if (filters != null && filters.isNotEmpty) 'filters:${jsonEncode(filters)}',
       if (limit != null) 'limit:$limit',
       if (limitStart != null) 'limitStart:$limitStart',
@@ -46,9 +50,19 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
   }
 
   /// Generates a cache key for a single document record.
-  String _getRecordCacheKey(String docType, String docName) => 'record_${docType}_$docName';
+  /// This key MUST also be unique to the fields requested.
+  String _getRecordCacheKey(String docType, String docName, Set<String>? fields) {
+    // To ensure a request for partial data doesn't read a full-data cache entry (and vice versa),
+    // we make the record key itself unique to the fields.
+    final String fieldsSignature =
+        fields != null && fields.isNotEmpty ? (fields.toList()..sort()).join(',') : 'full';
+    final String combinedKey = 'record_${docType}_${docName}_fields:$fieldsSignature';
+    // Hash it to keep the filename clean and of a consistent length.
+    final Digest digest = sha1.convert(utf8.encode(combinedKey));
+    return 'record_$digest';
+  }
 
-  /// Generates the key for a single document's modification timestamp.
+  /// Generates the key for a single document's modification timestamp. This is universal for the doc.
   String _getRecordTimestampKey(String docType, String docName) => 'ts_${docType}_$docName';
 
   @override
@@ -63,9 +77,10 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
     OrderBy? orderBy,
     String? groupBy,
   }) async {
-    // Note: This granular caching strategy does not work well with 'orFilters' or 'groupBy'.
-    // We will bypass the cache for such complex queries.
-    if ((orFilters != null && orFilters.isNotEmpty) || groupBy != null) {
+    final bool isComplexQuery = (orFilters != null && orFilters.isNotEmpty) || groupBy != null;
+
+    if (isComplexQuery) {
+      // Bypass cache only for truly complex queries like or_filters/group_by.
       return _remoteDataSource.getDocList<T>(
         docType,
         fromJson: fromJson,
@@ -94,6 +109,7 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
       // If the server returns no data, clear any cached list for this query and return null.
       final String listKey = _generateListCacheKey(
         docType,
+        fields: fields,
         filters: filters,
         limit: limit,
         limitStart: limitStart,
@@ -119,9 +135,9 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
       final String recordTimestampKey = _getRecordTimestampKey(docType, docName);
       final String? cachedTimestamp = _sharedPreferences.getString(recordTimestampKey);
 
-      // If timestamps match, load from cache.
+      // If timestamps match, load the specific partial/full data from cache.
       if (remoteTimestamp == cachedTimestamp) {
-        futureDocs.add(_getCachedRecord(docType, docName, fromJson: fromJson));
+        futureDocs.add(_getCachedRecord(docType, docName, fields: fields, fromJson: fromJson));
       }
       // Otherwise, fetch from network and update cache.
       else {
@@ -140,6 +156,7 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
     // 3. Update the cached list of names for this query.
     final String listKey = _generateListCacheKey(
       docType,
+      fields: fields,
       filters: filters,
       limit: limit,
       limitStart: limitStart,
@@ -152,22 +169,25 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
     return result.toList();
   }
 
-  /// Helper to get a single record from the cache.
+  /// Helper to get a single record (partial or full) from the cache.
   Future<T?> _getCachedRecord<T>(
     String docType,
     String docName, {
     required T Function(Map<String, dynamic> json) fromJson,
+    Set<String>? fields,
   }) async {
-    final String recordKey = _getRecordCacheKey(docType, docName);
+    final String recordKey = _getRecordCacheKey(docType, docName, fields);
     final FileInfo? fileInfo = await _cacheManager.getFileFromCache(recordKey);
+
     if (fileInfo != null) {
       final String cachedJson = await fileInfo.file.readAsString();
-      return fromJson(json.decode(cachedJson));
+      return fromJson(json.decode(cachedJson) as Map<String, dynamic>);
     }
-    return null;
+    // If the specific version is not in cache, we must fetch it.
+    return _fetchAndCacheRecord(docType, docName, '', fromJson: fromJson, fields: fields);
   }
 
-  /// Helper to fetch a single record, cache it, and update its timestamp.
+  /// Helper to fetch a single record (partial or full), cache it, and update its timestamp.
   Future<T?> _fetchAndCacheRecord<T>(
     String docType,
     String docName,
@@ -188,24 +208,30 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
     final T? doc = result?.firstOrNull;
 
     if (doc != null) {
-      final String recordKey = _getRecordCacheKey(docType, docName);
+      final String recordKey = _getRecordCacheKey(docType, docName, fields);
       final String recordTimestampKey = _getRecordTimestampKey(docType, docName);
 
-      // Cache the full document. Assumes 'doc' has a 'toJson' method.
+      // Cache the partial or full document that was just fetched.
       await _cacheManager.putFile(
         recordKey,
-        utf8.encode(json.encode((doc as dynamic).toJson())),
+        utf8.encode(json.encode(doc)), // doc is already a JSON-encodable object
         fileExtension: 'json',
       );
-      // Update the timestamp in SharedPreferences.
-      await _sharedPreferences.setString(recordTimestampKey, timestamp);
+
+      // If we just fetched new data, update its universal modification timestamp.
+      if (timestamp.isNotEmpty) {
+        await _sharedPreferences.setString(recordTimestampKey, timestamp);
+      }
     }
     return doc;
   }
 
-  /// Invalidates the cache for a single document.
+  /// Invalidates ALL cached versions of a single document.
   Future<void> _invalidateRecordCache(String docType, String docName) async {
-    await _cacheManager.removeFile(_getRecordCacheKey(docType, docName));
+    // This is now more complex. We can't know which fields were cached.
+    // A simple approach is to remove the timestamp. The next getDocList will
+    // see the mismatch and trigger a refetch for whatever fields it needs.
+    // The cache manager will eventually clean up the orphaned record files.
     await _sharedPreferences.remove(_getRecordTimestampKey(docType, docName));
   }
 
@@ -215,8 +241,7 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
     String docName, {
     required T Function(Map<String, dynamic> json) fromJson,
   }) {
-    // Caching for single documents can be added here if needed.
-    // For now, it will fetch directly from the remote source.
+    // For consistency, this could be made cache-aware in the future.
     return _remoteDataSource.getDoc<T>(docType, docName, fromJson: fromJson);
   }
 
