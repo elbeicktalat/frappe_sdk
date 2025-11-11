@@ -27,7 +27,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
       final Response<JSON> response = await _dio.get(
         '/api/resource/$docType',
         data: <String, Object?>{
-          'fields': jsonEncode(<String>['count(*) as count']),
+          'fields': jsonEncode(<String>['count(name) as count']),
           'filters': filters?.map(_getFilter).toList(),
         },
       );
