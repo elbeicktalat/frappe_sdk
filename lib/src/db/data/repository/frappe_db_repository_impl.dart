@@ -76,11 +76,12 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
     int? limitStart,
     OrderBy? orderBy,
     String? groupBy,
+    bool ignoreCache = false,
   }) async {
     final bool isComplexQuery = (orFilters != null && orFilters.isNotEmpty) || groupBy != null;
 
-    if (isComplexQuery) {
-      // Bypass cache only for truly complex queries like or_filters/group_by.
+    if (isComplexQuery || ignoreCache) {
+      // Bypass cache only for truly complex queries like or_filters/group_by or when ignoring cache.
       return _remoteDataSource.getDocList<T>(
         docType,
         fromJson: fromJson,

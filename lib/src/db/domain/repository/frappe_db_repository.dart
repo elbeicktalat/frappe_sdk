@@ -35,6 +35,7 @@ abstract interface class FrappeDBRepository {
   /// * [limitStart] The offset to start from.
   /// * [orderBy] Sort results by field and order.
   /// * [groupBy] Group the results by particular field.
+  /// * [ignoreCache] Whether to ignore the cache.
   ///
   /// {@endtemplate}
   Future<List<T?>?> getDocList<T>(
@@ -47,6 +48,7 @@ abstract interface class FrappeDBRepository {
     int? limitStart,
     OrderBy? orderBy,
     String? groupBy,
+    bool ignoreCache = false,
   });
 
   /// {@template FrappeDBRepository.createDoc}
