@@ -171,11 +171,30 @@ class SqfliteFrappeDBLocalDataSource implements FrappeDBLocalDataSource {
   Future<void> saveDoc(String docType, Map<String, dynamic> data) async {
     if (!data.containsKey('name')) return;
 
-    await _ensureTableAndColumns(docType, data);
-    final String tableName = _getTableName(docType);
-    final Map<String, dynamic> sqlData = _prepareDataForSql(data);
+    final Map<String, dynamic> docToSave = Map<String, dynamic>.from(data);
 
-    // SQLite Upsert (Partial update)
+    // 1. Recursively find and save child tables
+    final List<String> keys = docToSave.keys.toList();
+    for (final String key in keys) {
+      final dynamic value = docToSave[key];
+      if (value is List && value.isNotEmpty) {
+        // Check if it's a list of child documents (they must have a doctype)
+        final dynamic firstItem = value.first;
+        if (firstItem is Map<String, dynamic> && firstItem.containsKey('doctype')) {
+          final String childDocType = firstItem['doctype'] as String;
+          final List<Map<String, dynamic>> childDocs = value.cast<Map<String, dynamic>>();
+
+          // Save child documents in their own standalone table
+          await saveDocList(childDocType, childDocs);
+        }
+      }
+    }
+
+    // 2. Save the parent document
+    await _ensureTableAndColumns(docType, docToSave);
+    final String tableName = _getTableName(docType);
+    final Map<String, dynamic> sqlData = _prepareDataForSql(docToSave);
+
     final List<String> columns = sqlData.keys.toList();
     final List<String> placeholders = List<String>.filled(columns.length, '?');
     final List<String> updateClauses =
@@ -195,37 +214,10 @@ class SqfliteFrappeDBLocalDataSource implements FrappeDBLocalDataSource {
   Future<void> saveDocList(String docType, List<Map<String, dynamic>> docs) async {
     if (docs.isEmpty) return;
 
-    // Ensure table and all potential columns exist first (based on the first doc as heuristic)
-    // In a more robust impl, we'd check all docs if they have different fields.
+    // We process each doc individually to handle potential recursive children in each item
     for (final Map<String, dynamic> doc in docs) {
-      await _ensureTableAndColumns(docType, doc);
+      await saveDoc(docType, doc);
     }
-
-    final String tableName = _getTableName(docType);
-    final Batch batch = _database.batch();
-
-    for (final Map<String, dynamic> data in docs) {
-      if (!data.containsKey('name')) continue;
-      final Map<String, dynamic> sqlData = _prepareDataForSql(data);
-
-      final List<String> columns = sqlData.keys.toList();
-      final List<String> placeholders = List<String>.filled(columns.length, '?');
-      final List<String> updateClauses = columns
-          .where((String c) => c != 'name')
-          .map((String c) => '"$c" = EXCLUDED."$c"')
-          .toList();
-
-      final String sql = '''
-        INSERT INTO "$tableName" (${columns.map((String c) => '"$c"').join(', ')})
-        VALUES (${placeholders.join(', ')})
-        ON CONFLICT(name) DO UPDATE SET
-        ${updateClauses.join(', ')}
-      ''';
-
-      batch.rawInsert(sql, sqlData.values.toList());
-    }
-
-    await batch.commit(noResult: true);
   }
 
   @override
