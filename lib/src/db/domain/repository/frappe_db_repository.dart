@@ -48,7 +48,6 @@ abstract interface class FrappeDBRepository {
     int? limitStart,
     OrderBy? orderBy,
     String? groupBy,
-    bool ignoreCache = false,
   });
 
   /// {@template FrappeDBRepository.createDoc}

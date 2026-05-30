@@ -1,13 +1,23 @@
+import 'package:dio/dio.dart';
 import 'package:frappe_sdk/src/app/frappe_app.dart';
+import 'package:frappe_sdk/src/db/data/data_source/local/sqflite_frappe_db_local_data_source.dart';
 import 'package:frappe_sdk/src/db/domain/entity/frappe_doc/frappe_doc.dart';
 import 'package:frappe_sdk/src/db/domain/entity/frappe_doc/frappe_doc_status.dart';
 import 'package:frappe_sdk/src/db/domain/repository/frappe_db_repository.dart';
+import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
 
 void main() async {
+  // Initialize Sqflite (for mobile/desktop with sqflite_common_ffi)
+  final String path = join(await getDatabasesPath(), 'frappe_cache.db');
+  final Database database = await openDatabase(
+    path,
+    version: 1,
+  );
+
   final FrappeApp app = FrappeApp(
-    url: Uri.parse('https://your-frappe-instance.com'),
-    name: 'PIPPOS',
-    token: '<api-key>:<secret-key>',
+    dio: Dio(),
+    localDataSource: SqfliteFrappeDBLocalDataSource(database),
   );
 
   final FrappeDBRepository db = app.db;
