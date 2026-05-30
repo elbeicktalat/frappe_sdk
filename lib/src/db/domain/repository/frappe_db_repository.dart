@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:frappe_sdk/src/db/domain/entity/filter/filter.dart';
+import 'package:frappe_sdk/src/db/domain/utils/cache_strategy.dart';
 import 'package:frappe_sdk/src/db/domain/utils/typedefs.dart';
 
 /// A repository for interacting with the Frappe database.
@@ -20,6 +21,7 @@ abstract interface class FrappeDBRepository {
     String docType,
     String docName, {
     required T Function(Map<String, dynamic> json) fromJson,
+    CacheStrategy? strategy,
   });
 
   /// {@template FrappeDBRepository.getDocList}
@@ -48,6 +50,7 @@ abstract interface class FrappeDBRepository {
     int? limitStart,
     OrderBy? orderBy,
     String? groupBy,
+    CacheStrategy? strategy,
   });
 
   /// {@template FrappeDBRepository.createDoc}
