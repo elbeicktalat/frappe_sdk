@@ -49,9 +49,14 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
         return _fetchAndSaveDoc(docType, docName, fromJson: fromJson);
 
       case CacheStrategy.networkFirst:
+        final Map<String, dynamic>? cachedData = await _localDataSource.getDocRaw(docType, docName);
+        if (cachedData != null && cachedData['__is_full'] == 1) {
+          return fromJson(cachedData);
+        }
         try {
           return await _fetchAndSaveDoc(docType, docName, fromJson: fromJson);
         } catch (_) {
+          if (cachedData != null) return fromJson(cachedData);
           return _localDataSource.getDoc(docType, docName, fromJson: fromJson);
         }
     }
