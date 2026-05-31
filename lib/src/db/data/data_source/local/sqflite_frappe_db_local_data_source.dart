@@ -105,6 +105,13 @@ class SqfliteFrappeDBLocalDataSource implements FrappeDBLocalDataSource {
     String docName, {
     required T Function(Map<String, dynamic> json) fromJson,
   }) async {
+    final Map<String, dynamic>? doc = await getDocRaw(docType, docName);
+    if (doc == null) return null;
+    return fromJson(doc);
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getDocRaw(String docType, String docName) async {
     final String tableName = _getTableName(docType);
     try {
       final List<Map<String, dynamic>> maps = await _database.query(
@@ -115,9 +122,69 @@ class SqfliteFrappeDBLocalDataSource implements FrappeDBLocalDataSource {
       );
 
       if (maps.isEmpty) return null;
-      return fromJson(_parseSqlData(maps.first));
+
+      final Map<String, dynamic> doc = _parseSqlData(maps.first);
+
+      // Load child tables
+      if (doc.containsKey('__child_tables') && doc['__child_tables'] != null) {
+        final dynamic mappingRaw = doc['__child_tables'];
+        final Map<String, dynamic> mapping = mappingRaw is String
+            ? json.decode(mappingRaw) as Map<String, dynamic>
+            : mappingRaw as Map<String, dynamic>;
+        for (final String field in mapping.keys) {
+          final String childDocType = mapping[field] as String;
+          final List<Map<String, dynamic>>? children =
+              await _fetchChildren(childDocType, docName, docType, field);
+          if (children != null) {
+            doc[field] = children;
+          }
+        }
+      }
+
+      return doc;
     } catch (_) {
       // Table might not exist yet
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>?> _fetchChildren(
+    String docType,
+    String parentName,
+    String parentType,
+    String parentField,
+  ) async {
+    final String tableName = _getTableName(docType);
+    try {
+      final List<Map<String, dynamic>> maps = await _database.query(
+        '"$tableName"',
+        where: 'parent = ? AND parenttype = ? AND parentfield = ?',
+        whereArgs: <String>[parentName, parentType, parentField],
+      );
+
+      final List<Map<String, dynamic>> results = <Map<String, dynamic>>[];
+      for (final Map<String, dynamic> row in maps) {
+        final Map<String, dynamic> childDoc = _parseSqlData(row);
+
+        // Recurse for nested child tables
+        if (childDoc.containsKey('__child_tables') && childDoc['__child_tables'] != null) {
+          final dynamic mappingRaw = childDoc['__child_tables'];
+          final Map<String, dynamic> mapping = mappingRaw is String
+              ? json.decode(mappingRaw) as Map<String, dynamic>
+              : mappingRaw as Map<String, dynamic>;
+          for (final String field in mapping.keys) {
+            final String grandChildDocType = mapping[field] as String;
+            final List<Map<String, dynamic>>? grandChildren =
+                await _fetchChildren(grandChildDocType, childDoc['name'] as String, docType, field);
+            if (grandChildren != null) {
+              childDoc[field] = grandChildren;
+            }
+          }
+        }
+        results.add(childDoc);
+      }
+      return results;
+    } catch (_) {
       return null;
     }
   }
@@ -168,12 +235,18 @@ class SqfliteFrappeDBLocalDataSource implements FrappeDBLocalDataSource {
   }
 
   @override
-  Future<void> saveDoc(String docType, Map<String, dynamic> data) async {
+  Future<void> saveDoc(
+    String docType,
+    Map<String, dynamic> data, {
+    bool isFull = false,
+  }) async {
     if (!data.containsKey('name')) return;
 
     final Map<String, dynamic> docToSave = Map<String, dynamic>.from(data);
+    docToSave['__is_full'] = isFull ? 1 : 0;
 
     // 1. Recursively find and save child tables
+    final Map<String, String> childTableMapping = <String, String>{};
     final List<String> keys = docToSave.keys.toList();
     for (final String key in keys) {
       final dynamic value = docToSave[key];
@@ -182,12 +255,29 @@ class SqfliteFrappeDBLocalDataSource implements FrappeDBLocalDataSource {
         final dynamic firstItem = value.first;
         if (firstItem is Map<String, dynamic> && firstItem.containsKey('doctype')) {
           final String childDocType = firstItem['doctype'] as String;
-          final List<Map<String, dynamic>> childDocs = value.cast<Map<String, dynamic>>();
+          childTableMapping[key] = childDocType;
+
+          final List<Map<String, dynamic>> childDocs =
+              value.cast<Map<String, dynamic>>().map((Map<String, dynamic> child) {
+            return <String, dynamic>{
+              ...child,
+              'parent': docToSave['name'],
+              'parenttype': docType,
+              'parentfield': key,
+            };
+          }).toList();
 
           // Save child documents in their own standalone table
-          await saveDocList(childDocType, childDocs);
+          await saveDocList(childDocType, childDocs, isFull: isFull);
+
+          // Remove from parent to avoid storing large JSON blob
+          docToSave.remove(key);
         }
       }
+    }
+
+    if (childTableMapping.isNotEmpty) {
+      docToSave['__child_tables'] = json.encode(childTableMapping);
     }
 
     // 2. Save the parent document
@@ -211,12 +301,16 @@ class SqfliteFrappeDBLocalDataSource implements FrappeDBLocalDataSource {
   }
 
   @override
-  Future<void> saveDocList(String docType, List<Map<String, dynamic>> docs) async {
+  Future<void> saveDocList(
+    String docType,
+    List<Map<String, dynamic>> docs, {
+    bool isFull = false,
+  }) async {
     if (docs.isEmpty) return;
 
     // We process each doc individually to handle potential recursive children in each item
     for (final Map<String, dynamic> doc in docs) {
-      await saveDoc(docType, doc);
+      await saveDoc(docType, doc, isFull: isFull);
     }
   }
 

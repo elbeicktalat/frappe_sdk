@@ -14,6 +14,9 @@ abstract interface class FrappeDBLocalDataSource {
     required T Function(Map<String, dynamic> json) fromJson,
   });
 
+  /// Get a raw document from the local database.
+  Future<Map<String, dynamic>?> getDocRaw(String docType, String docName);
+
   /// Get a list of documents from the local database.
   Future<List<T?>?> getDocList<T>(
     String docType, {
@@ -28,10 +31,18 @@ abstract interface class FrappeDBLocalDataSource {
   });
 
   /// Save a document to the local database, merging with existing data if present.
-  Future<void> saveDoc(String docType, Map<String, dynamic> data);
+  Future<void> saveDoc(
+    String docType,
+    Map<String, dynamic> data, {
+    bool isFull = false,
+  });
 
   /// Save a list of documents to the local database, merging with existing data if present.
-  Future<void> saveDocList(String docType, List<Map<String, dynamic>> docs);
+  Future<void> saveDocList(
+    String docType,
+    List<Map<String, dynamic>> docs, {
+    bool isFull = false,
+  });
 
   /// Delete a document from the local database.
   Future<void> deleteDoc(String docType, String docName);

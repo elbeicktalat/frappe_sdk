@@ -42,8 +42,10 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
         return _localDataSource.getDoc(docType, docName, fromJson: fromJson);
 
       case CacheStrategy.cacheFirst:
-        final T? cachedDoc = await _localDataSource.getDoc(docType, docName, fromJson: fromJson);
-        if (cachedDoc != null) return cachedDoc;
+        final Map<String, dynamic>? cachedData = await _localDataSource.getDocRaw(docType, docName);
+        if (cachedData != null && cachedData['__is_full'] == 1) {
+          return fromJson(cachedData);
+        }
         return _fetchAndSaveDoc(docType, docName, fromJson: fromJson);
 
       case CacheStrategy.networkFirst:
@@ -172,7 +174,7 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
         fromJson: (Map<String, dynamic> json) => json,
       );
       if (rawDoc != null) {
-        await _localDataSource.saveDoc(docType, rawDoc);
+        await _localDataSource.saveDoc(docType, rawDoc, isFull: true);
       }
     }
     return doc;
@@ -204,7 +206,7 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
     if (rawDocs != null) {
       final List<Map<String, dynamic>> validDocs =
           rawDocs.whereType<Map<String, dynamic>>().toList();
-      await _localDataSource.saveDocList(docType, validDocs);
+      await _localDataSource.saveDocList(docType, validDocs, isFull: false);
       return validDocs.map(fromJson).toList();
     }
     return null;
@@ -224,7 +226,7 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
     );
 
     if (rawDoc != null) {
-      await _localDataSource.saveDoc(docType, rawDoc);
+      await _localDataSource.saveDoc(docType, rawDoc, isFull: true);
       return fromJson(rawDoc);
     }
     return null;
@@ -245,7 +247,7 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
     );
 
     if (rawDoc != null) {
-      await _localDataSource.saveDoc(docType, rawDoc);
+      await _localDataSource.saveDoc(docType, rawDoc, isFull: true);
       return fromJson(rawDoc);
     }
     return null;
