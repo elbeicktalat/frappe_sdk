@@ -5,6 +5,7 @@
 import 'package:frappe_sdk/src/db/data/data_source/local/frappe_db_local_data_source.dart';
 import 'package:frappe_sdk/src/db/data/data_source/remote/frappe_db_remote_data_source.dart';
 import 'package:frappe_sdk/src/db/domain/entity/filter/filter.dart';
+import 'package:frappe_sdk/src/db/domain/entity/filter/filter_operator.dart';
 import 'package:frappe_sdk/src/db/domain/repository/frappe_db_repository.dart';
 import 'package:frappe_sdk/src/db/domain/utils/cache_strategy.dart';
 import 'package:frappe_sdk/src/db/domain/utils/typedefs.dart';
@@ -51,7 +52,27 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
       case CacheStrategy.networkFirst:
         final Map<String, dynamic>? cachedData = await _localDataSource.getDocRaw(docType, docName);
         if (cachedData != null && cachedData['__is_full'] == 1) {
-          return fromJson(cachedData);
+          try {
+            // Optimization: check if modified on server before fetching full doc
+            final List<Map<String, dynamic>?>? checkList =
+                await _remoteDataSource.getDocList<Map<String, dynamic>>(
+              docType,
+              fields: <String>{'name', 'modified'},
+              filters: <Filter>[Filter.equal('name', docName)],
+              limit: 1,
+              fromJson: (Map<String, dynamic> json) => json,
+            );
+
+            if (checkList != null && checkList.isNotEmpty) {
+              final Map<String, dynamic>? remoteDoc = checkList.first;
+              if (remoteDoc != null && remoteDoc['modified'] == cachedData['modified']) {
+                return fromJson(cachedData);
+              }
+            }
+          } catch (_) {
+            // Network error during check, fallback to cache
+            return fromJson(cachedData);
+          }
         }
         try {
           return await _fetchAndSaveDoc(docType, docName, fromJson: fromJson);
@@ -131,6 +152,79 @@ class FrappeDBRepositoryImpl implements FrappeDBRepository {
 
       case CacheStrategy.networkFirst:
         try {
+          // Optimization: check name and modified first if requesting many fields
+          final bool isMinFields = fields == null ||
+              fields.isEmpty ||
+              (fields.length <= 2 && fields.every((String f) => f == 'name' || f == 'modified'));
+
+          if (!isMinFields) {
+            final List<Map<String, dynamic>?>? remoteMin =
+                await _remoteDataSource.getDocList<Map<String, dynamic>>(
+              docType,
+              fields: <String>{'name', 'modified'},
+              filters: filters,
+              orFilters: orFilters,
+              limit: limit,
+              limitStart: limitStart,
+              orderBy: orderBy,
+              groupBy: groupBy,
+              fromJson: (Map<String, dynamic> json) => json,
+            );
+
+            if (remoteMin != null && remoteMin.isNotEmpty) {
+              final List<String> names = remoteMin
+                  .whereType<Map<String, dynamic>>()
+                  .map((Map<String, dynamic> e) => e['name'] as String)
+                  .toList();
+
+              // Get these from local to compare modified
+              final List<Map<String, dynamic>?>? localMin =
+                  await _localDataSource.getDocList<Map<String, dynamic>>(
+                docType,
+                fields: <String>{'name', 'modified'},
+                filters: <Filter>[
+                  Filter(field: 'name', operator: FilterOperator.$in, value: names)
+                ],
+                fromJson: (Map<String, dynamic> json) => json,
+              );
+
+              final Map<String, String> localModifiedMap = <String, String>{
+                for (final Map<String, dynamic> doc
+                    in localMin?.whereType<Map<String, dynamic>>() ?? <Map<String, dynamic>>[])
+                  doc['name'] as String: doc['modified'] as String
+              };
+
+              bool allFresh = true;
+              for (final Map<String, dynamic> remoteDoc
+                  in remoteMin.whereType<Map<String, dynamic>>()) {
+                final String name = remoteDoc['name'] as String;
+                final String remoteMod = remoteDoc['modified'] as String;
+                if (localModifiedMap[name] != remoteMod) {
+                  allFresh = false;
+                  break;
+                }
+              }
+
+              if (allFresh) {
+                // Try to get the full list from local cache
+                final List<T?>? cachedList = await _localDataSource.getDocList(
+                  docType,
+                  fromJson: fromJson,
+                  fields: fields,
+                  filters: filters,
+                  orFilters: orFilters,
+                  limit: limit,
+                  limitStart: limitStart,
+                  orderBy: orderBy,
+                  groupBy: groupBy,
+                );
+                if (cachedList != null && cachedList.length == remoteMin.length) {
+                  return cachedList;
+                }
+              }
+            }
+          }
+
           return await _fetchAndSaveDocList(
             docType,
             fromJson: fromJson,

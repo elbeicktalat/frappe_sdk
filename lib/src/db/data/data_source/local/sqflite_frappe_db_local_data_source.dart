@@ -238,8 +238,25 @@ class SqfliteFrappeDBLocalDataSource implements FrappeDBLocalDataSource {
 
     if (filters != null && filters.isNotEmpty) {
       for (final Filter filter in filters) {
-        whereClauses.add('"${filter.field}" ${_getSqlOperator(filter.operator)} ?');
-        whereArgs.add(filter.value);
+        if (filter.operator == FilterOperator.$in && filter.value is Iterable) {
+          final List<dynamic> values = (filter.value as Iterable<dynamic>).toList();
+          final String placeholders = List<String>.filled(values.length, '?').join(', ');
+          whereClauses.add('"${filter.field}" IN ($placeholders)');
+          whereArgs.addAll(values);
+        } else if (filter.operator == FilterOperator.notIn && filter.value is Iterable) {
+          final List<dynamic> values = (filter.value as Iterable<dynamic>).toList();
+          final String placeholders = List<String>.filled(values.length, '?').join(', ');
+          whereClauses.add('"${filter.field}" NOT IN ($placeholders)');
+          whereArgs.addAll(values);
+        } else if (filter.operator == FilterOperator.between &&
+            filter.value is List &&
+            (filter.value as List).length == 2) {
+          whereClauses.add('"${filter.field}" BETWEEN ? AND ?');
+          whereArgs.addAll(filter.value as List);
+        } else {
+          whereClauses.add('"${filter.field}" ${_getSqlOperator(filter.operator)} ?');
+          whereArgs.add(filter.value);
+        }
       }
     }
 
