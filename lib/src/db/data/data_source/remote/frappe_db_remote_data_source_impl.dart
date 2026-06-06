@@ -74,7 +74,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
     try {
       final Response<dynamic> response = await _dio.delete('/api/resource/$docType/$docName');
 
-      return response.statusCode == HttpStatus.ok;
+      return response.statusCode == HttpStatus.accepted;
     } on DioException catch (e, s) {
       _log.e(e, stackTrace: s);
       _handelHttpException(e);
