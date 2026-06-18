@@ -18,7 +18,7 @@ class FrappeApp {
   FrappeApp({
     required Dio dio,
     required FrappeDBLocalDataSource localDataSource,
-    this.defaultStrategy = CacheStrategy.cacheFirst,
+    this.defaultStrategy = CacheStrategy.networkFirst,
   })  : _dio = dio,
         _localDataSource = localDataSource;
 
