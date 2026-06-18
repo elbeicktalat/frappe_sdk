@@ -28,7 +28,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
         '/api/resource/$docType',
         data: <String, Object?>{
           'fields': jsonEncode(<String>['count(name) as count']),
-          'filters': filters?.map(_getFilter).toList(),
+          if (filters != null) 'filters': jsonEncode(filters.map(_getFilter).toList()),
         },
       );
 
@@ -124,13 +124,13 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
       final Response<JSON> response = await _dio.get(
         '/api/resource/$docType',
         data: <String, Object?>{
-          'fields': jsonEncode(fields?.toList()),
-          'filters': filters?.map(_getFilter).toList(),
-          'or_filters': orFilters?.map(_getFilter).toList(),
-          'limit': '$limit',
-          'limit_start': '$limitStart',
+          if (fields != null) 'fields': jsonEncode(fields.toList()),
+          if (filters != null) 'filters': jsonEncode(filters.map(_getFilter).toList()),
+          if (orFilters != null) 'or_filters': jsonEncode(orFilters.map(_getFilter).toList()),
+          if (limit != null) 'limit': limit,
+          if (limitStart != null) 'limit_start': limitStart,
           if (orderBy != null) 'order_by': '${orderBy.field} ${orderBy.desc ? 'desc' : 'asc'}',
-          'group_by': groupBy,
+          if (groupBy != null) 'group_by': groupBy,
         },
       );
 
@@ -197,7 +197,7 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
     }
   }
 
-  List<String> _getFilter(Filter filter) {
-    return <String>[filter.field, filter.operator.symbol, '${filter.value}'];
+  List<dynamic> _getFilter(Filter filter) {
+    return <dynamic>[filter.field, filter.operator.symbol, filter.value];
   }
 }
