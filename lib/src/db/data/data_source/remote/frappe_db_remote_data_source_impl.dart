@@ -188,13 +188,12 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
     return fromJson(json);
   }
 
+  /// Turns an error answer from the server into an exception carrying what it
+  /// said. Network errors (no answer) are left to the caller, whose cache
+  /// strategies fall back to local data on them.
   void _handelHttpException(DioException e) {
-    switch (e.response?.statusCode) {
-      case HttpStatus.notFound:
-        throw FrappeNotFoundException(e.response!.statusCode!);
-      case HttpStatus.unauthorized:
-        throw FrappeUnauthorizedException(e.response!.statusCode!);
-    }
+    final Response<dynamic>? response = e.response;
+    if (response != null) throw FrappeServerException.fromResponse(response);
   }
 
   List<dynamic> _getFilter(Filter filter) {

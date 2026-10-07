@@ -3,15 +3,12 @@
 // found in the LICENSE file.
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:frappe_sdk/frappe_sdk.dart';
 import 'package:frappe_sdk/src/_internal/utils.dart';
 import 'package:frappe_sdk/src/call/data/data_source/remote/frappe_call_remote_data_source.dart';
 import 'package:frappe_sdk/src/call/data/models/barcode_scan_result_model.dart';
-import 'package:frappe_sdk/src/call/domain/entities/barcode_scan_result.dart';
-import 'package:frappe_sdk/src/call/domain/utils/http_methods.dart';
 import 'package:logger/logger.dart';
 
 /// The remote data source implementation for the Frappe call.
@@ -234,13 +231,13 @@ class FrappeCallRemoteDataSourceImpl implements FrappeCallRemoteDataSource {
     return result;
   }
 
+  /// Turns a failed request into an exception carrying what the server said
+  /// (or a network error when it couldn't be reached), instead of letting the
+  /// caller see a bare `null`.
   void _handelHttpException(DioException e) {
-    switch (e.response?.statusCode) {
-      case HttpStatus.notFound:
-        throw FrappeNotFoundException(e.response!.statusCode!);
-      case HttpStatus.unauthorized:
-        throw FrappeUnauthorizedException(e.response!.statusCode!);
-    }
+    final Response<dynamic>? response = e.response;
+    if (response == null) throw FrappeNetworkException(e);
+    throw FrappeServerException.fromResponse(response);
   }
 
   List<String> _getFilter(Filter filter) {
