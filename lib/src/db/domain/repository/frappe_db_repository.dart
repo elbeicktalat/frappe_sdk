@@ -33,7 +33,7 @@ abstract interface class FrappeDBRepository {
   /// * [fields] The fields to fetch and return.
   /// * [filters] The filters to apply - SQL AND Operation.
   /// * [orFilters] The filters to apply - SQL OR Operation.
-  /// * [limit] The maximum number of documents to return.
+  /// * [limit] The maximum number of documents to return; all of them when null.
   /// * [limitStart] The offset to start from.
   /// * [orderBy] Sort results by field and order.
   /// * [groupBy] Group the results by particular field.

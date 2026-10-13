@@ -24,22 +24,17 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
   @override
   Future<int?> countDoc<T>(String docType, {List<Filter>? filters}) async {
     try {
+      // frappe.client.get_count rather than a `count(name)` field: Frappe 16
+      // refuses SQL functions written as strings in a list's fields.
       final Response<JSON> response = await _dio.get(
-        '/api/resource/$docType',
+        '/api/method/frappe.client.get_count',
         data: <String, Object?>{
-          'fields': jsonEncode(<String>['count(name) as count']),
+          'doctype': docType,
           if (filters != null) 'filters': jsonEncode(filters.map(_getFilter).toList()),
         },
       );
 
-      if (response.data == null || (response.data!['data'] as List<dynamic>).isEmpty) {
-        return 0;
-      }
-
-      final List<dynamic> data = response.data!['data'] as List<dynamic>;
-      // ignore: avoid_dynamic_calls
-      final int count = data.first['count'] as int;
-      return count;
+      return (response.data?['message'] as num?)?.toInt() ?? 0;
     } on DioException catch (e, s) {
       _log.e(e, stackTrace: s);
       _handelHttpException(e);
@@ -106,6 +101,9 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
     return null;
   }
 
+  /// Documents asked for per request when no [getDocList] limit is given.
+  static const int _pageSize = 500;
+
   @override
   Future<List<T?>?> getDocList<T>(
     String docType, {
@@ -121,22 +119,39 @@ final class FrappeDBRemoteDataSourceImpl implements FrappeDBRemoteDataSource {
     try {
       _log.i(fields);
 
-      final Response<JSON> response = await _dio.get(
-        '/api/resource/$docType',
-        data: <String, Object?>{
-          if (fields != null) 'fields': jsonEncode(fields.toList()),
-          if (filters != null) 'filters': jsonEncode(filters.map(_getFilter).toList()),
-          if (orFilters != null) 'or_filters': jsonEncode(orFilters.map(_getFilter).toList()),
-          if (limit != null) 'limit': limit,
-          if (limitStart != null) 'limit_start': limitStart,
-          if (orderBy != null) 'order_by': '${orderBy.field} ${orderBy.desc ? 'desc' : 'asc'}',
-          if (groupBy != null) 'group_by': groupBy,
-        },
-      );
+      Future<List<dynamic>> page(int pageLimit, int? pageStart) async {
+        final Response<JSON> response = await _dio.get(
+          '/api/resource/$docType',
+          data: <String, Object?>{
+            if (fields != null) 'fields': jsonEncode(fields.toList()),
+            if (filters != null) 'filters': jsonEncode(filters.map(_getFilter).toList()),
+            if (orFilters != null) 'or_filters': jsonEncode(orFilters.map(_getFilter).toList()),
+            'limit': pageLimit,
+            if (pageStart != null) 'limit_start': pageStart,
+            if (orderBy != null) 'order_by': '${orderBy.field} ${orderBy.desc ? 'desc' : 'asc'}',
+            if (groupBy != null) 'group_by': groupBy,
+          },
+        );
+        _log.d(response);
+        return response.data?['data'] as List<dynamic>? ?? <dynamic>[];
+      }
 
-      _log.d(response);
+      final List<dynamic> data;
+      if (limit != null) {
+        data = await page(limit, limitStart);
+      } else {
+        // No limit means every document. Frappe answers 20 when it's not
+        // told how many (and 0 doesn't mean "all" either), so ask page by page.
+        data = <dynamic>[];
+        int start = limitStart ?? 0;
+        while (true) {
+          final List<dynamic> rows = await page(_pageSize, start);
+          data.addAll(rows);
+          if (rows.length < _pageSize) break;
+          start += _pageSize;
+        }
+      }
 
-      final List<dynamic> data = response.data?['data'] as List<dynamic>;
       if (data.isEmpty) return null;
 
       return data.map((Object? json) => fromJson(json! as Map<String, dynamic>)).toList();
